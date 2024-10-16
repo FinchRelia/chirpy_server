@@ -12,16 +12,16 @@ type apiConfig struct {
 func main() {
 	apiCfg := &apiConfig{}
 	mux := http.NewServeMux()
-	fileServer := http.FileServer(http.Dir("."))
-	mux.Handle("/app", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", fileServer)))
-	mux.Handle("/app/assets/", http.StripPrefix("/app/assets/", http.FileServer(http.Dir("./assets/"))))
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, req *http.Request) {
+	fsHandler := apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir("."))))
+	mux.Handle("/app/", fsHandler)
+	mux.HandleFunc("GET /api/healthz", func(w http.ResponseWriter, req *http.Request) {
 		req.Header.Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
-	mux.Handle("GET /metrics", http.HandlerFunc(apiCfg.serveMetrics))
-	mux.Handle("POST /reset", http.HandlerFunc(apiCfg.serveReset))
+	mux.Handle("GET /admin/metrics", http.HandlerFunc(apiCfg.serveMetrics))
+	mux.Handle("POST /admin/reset", http.HandlerFunc(apiCfg.serveReset))
+	mux.HandleFunc("POST /api/validate_chirp", decode)
 
 	server := &http.Server{
 		Addr:    ":8080",
