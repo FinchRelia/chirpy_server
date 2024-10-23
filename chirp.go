@@ -1,15 +1,30 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
+	"time"
+
+	"github.com/finchrelia/chirpy-server/internal/database"
+	"github.com/google/uuid"
 )
 
-func decode(w http.ResponseWriter, r *http.Request) {
+type Chirp struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	UserID    uuid.UUID `json:"user_id"`
+	Body      string    `json:"body"`
+}
+
+func (cfg *apiConfig) chirpsCreate(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Content string `json:"body"`
+		Content string    `json:"body"`
+		UserID  uuid.UUID `json:"user_id"`
 	}
 	type returnVals struct {
 		Data string `json:"cleaned_body"`
@@ -41,17 +56,32 @@ func decode(w http.ResponseWriter, r *http.Request) {
 		w.Write(dat)
 	} else {
 		cleanedData := cleanText(params.Content)
-		respBody := returnVals{
-			Data: cleanedData,
+		// respBody := returnVals{
+		// 	Data: cleanedData,
+		// }
+		chirp, err := cfg.DB.CreateChirp(r.Context(), database.CreateChirpParams{
+			Body:   cleanedData,
+			UserID: params.UserID,
+		})
+		if err != nil {
+			log.Printf("Error creating chirp: %s", err)
+			w.WriteHeader(500)
+			return
 		}
-		dat, err := json.Marshal(respBody)
+		dat, err := json.Marshal(Chirp{
+			ID:        chirp.ID,
+			CreatedAt: chirp.CreatedAt,
+			UpdatedAt: chirp.UpdatedAt,
+			Body:      chirp.Body,
+			UserID:    chirp.UserID,
+		})
 		if err != nil {
 			log.Printf("Error marshalling JSON: %s", err)
 			w.WriteHeader(500)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(200)
+		w.WriteHeader(201)
 		w.Write(dat)
 	}
 }
@@ -68,4 +98,67 @@ func cleanText(s string) string {
 		}
 	}
 	return strings.Join(splittedString, " ")
+}
+
+func (cfg *apiConfig) getChirps(w http.ResponseWriter, r *http.Request) {
+	chirps, err := cfg.DB.GetChirps(r.Context())
+	if err != nil {
+		log.Printf("Error getting chirps: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	newChirps := []Chirp{}
+	for _, chirp := range chirps {
+		newChirps = append(newChirps, Chirp{
+			ID:        chirp.ID,
+			CreatedAt: chirp.CreatedAt,
+			UpdatedAt: chirp.UpdatedAt,
+			Body:      chirp.Body,
+			UserID:    chirp.UserID,
+		})
+	}
+	dat, err := json.Marshal(newChirps)
+	if err != nil {
+		log.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	w.Write(dat)
+}
+
+func (cfg *apiConfig) getChirp(w http.ResponseWriter, r *http.Request) {
+	idFromQuery := r.PathValue("chirpID")
+	id, err := uuid.Parse(idFromQuery)
+	if err != nil {
+		log.Printf("Not a valid ID: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	chirp, err := cfg.DB.GetChirp(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		log.Printf("Error getting chirp: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	dat, err := json.Marshal(Chirp{
+		ID:        chirp.ID,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body:      chirp.Body,
+		UserID:    chirp.UserID,
+	})
+	if err != nil {
+		log.Printf("Error marshalling JSON: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	w.Write(dat)
 }
