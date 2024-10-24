@@ -6,19 +6,22 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/finchrelia/chirpy-server/internal/auth"
 	"github.com/google/uuid"
 )
 
 type User struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
+	ID             uuid.UUID `json:"id"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	Email          string    `json:"email"`
+	HashedPassword string    `json:"-"`
 }
 
 func (cfg *apiConfig) createUsers(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Email string `json:"email"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -30,7 +33,12 @@ func (cfg *apiConfig) createUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.Body.Close()
-	newDBUser, err := cfg.DB.CreateUser(r.Context(), params.Email)
+
+	hashedPassword, err := auth.HashPassword(params.Password)
+	if err != nil {
+		log.Printf("Error hashing password: %s", err)
+	}
+	newDBUser, err := cfg.DB.CreateUser(r.Context(), params.Email, hashedPassword)
 	if err != nil {
 		log.Printf("Error creating user %s: %s", params.Email, err)
 		w.WriteHeader(500)
