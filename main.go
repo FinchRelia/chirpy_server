@@ -16,6 +16,7 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	DB             *database.Queries
 	Platform       string
+	JWT            string
 }
 
 func main() {
@@ -28,6 +29,10 @@ func main() {
 	if platform == "" {
 		log.Fatalf("Empty PLATFORM env var!")
 	}
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatalf("Empty JWT_SECRET env var!")
+	}
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("Unable to connect to db: %s", err)
@@ -36,6 +41,7 @@ func main() {
 		fileserverHits: atomic.Int32{},
 		DB:             database.New(db),
 		Platform:       platform,
+		JWT:            jwtSecret,
 	}
 	mux := http.NewServeMux()
 	fsHandler := apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir("."))))
@@ -52,6 +58,8 @@ func main() {
 	mux.HandleFunc("POST /api/users", apiCfg.createUsers)
 	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.getChirp)
 	mux.HandleFunc("POST /api/login", apiCfg.Login)
+	mux.HandleFunc("POST /api/refresh", apiCfg.RefreshToken)
+	mux.HandleFunc("POST /api/revoke", apiCfg.RevokeToken)
 
 	server := &http.Server{
 		Addr:    ":8080",

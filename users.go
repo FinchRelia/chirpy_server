@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/finchrelia/chirpy-server/internal/auth"
+	"github.com/finchrelia/chirpy-server/internal/database"
 	"github.com/google/uuid"
 )
 
@@ -38,7 +39,10 @@ func (cfg *apiConfig) createUsers(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("Error hashing password: %s", err)
 	}
-	newDBUser, err := cfg.DB.CreateUser(r.Context(), params.Email, hashedPassword)
+	newDBUser, err := cfg.DB.CreateUser(r.Context(), database.CreateUserParams{
+		Email:          params.Email,
+		HashedPassword: hashedPassword,
+	})
 	if err != nil {
 		log.Printf("Error creating user %s: %s", params.Email, err)
 		w.WriteHeader(500)

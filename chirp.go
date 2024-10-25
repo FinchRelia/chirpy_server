@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/finchrelia/chirpy-server/internal/auth"
 	"github.com/finchrelia/chirpy-server/internal/database"
 	"github.com/google/uuid"
 )
@@ -23,16 +24,23 @@ type Chirp struct {
 
 func (cfg *apiConfig) chirpsCreate(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Content string    `json:"body"`
-		UserID  uuid.UUID `json:"user_id"`
+		Content string `json:"body"`
 	}
-	type returnVals struct {
-		Data string `json:"cleaned_body"`
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Printf("Error extracting token: %s", err)
+		w.WriteHeader(401)
+		return
 	}
-
+	userId, err := auth.ValidateJWT(token, cfg.JWT)
+	if err != nil {
+		log.Printf("Invalid JWT: %s", err)
+		w.WriteHeader(401)
+		return
+	}
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
-	err := decoder.Decode(&params)
+	err = decoder.Decode(&params)
 	if err != nil {
 		log.Printf("Error decoding parameters: %s", err)
 		w.WriteHeader(500)
@@ -56,12 +64,9 @@ func (cfg *apiConfig) chirpsCreate(w http.ResponseWriter, r *http.Request) {
 		w.Write(dat)
 	} else {
 		cleanedData := cleanText(params.Content)
-		// respBody := returnVals{
-		// 	Data: cleanedData,
-		// }
 		chirp, err := cfg.DB.CreateChirp(r.Context(), database.CreateChirpParams{
 			Body:   cleanedData,
-			UserID: params.UserID,
+			UserID: userId,
 		})
 		if err != nil {
 			log.Printf("Error creating chirp: %s", err)
