@@ -1,62 +1,52 @@
-package main
+package handler
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 
 	"github.com/finchrelia/chirpy-server/internal/auth"
 )
 
-func (cfg *apiConfig) RefreshToken(w http.ResponseWriter, r *http.Request) {
+func (cfg *APIConfig) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	token, err := auth.GetBearerToken(r.Header)
 	if err != nil {
-		log.Printf("Error extracting token: %s", err)
-		w.WriteHeader(401)
+		log.Printf("Error extracting token: %v", err)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
 	dbUser, err := cfg.DB.GetUserFromRefreshToken(r.Context(), token)
 	if err != nil {
 		log.Printf("Error getting user: %v", err)
-		w.WriteHeader(401)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 	newToken, err := auth.MakeJWT(dbUser, cfg.JWT)
 	if err != nil {
 		log.Printf("Error creating new JWT: %v", err)
-		w.WriteHeader(500)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	type tokenResponse struct {
 		AccessToken string `json:"token"`
 	}
-
-	data, err := json.Marshal(tokenResponse{
+	JsonResponse(w, http.StatusOK, tokenResponse{
 		AccessToken: newToken,
 	})
-	if err != nil {
-		log.Printf("Error marshalling JSON: %s", err)
-		w.WriteHeader(500)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	w.Write(data)
 }
 
-func (cfg *apiConfig) RevokeToken(w http.ResponseWriter, r *http.Request) {
+func (cfg *APIConfig) RevokeToken(w http.ResponseWriter, r *http.Request) {
 	token, err := auth.GetBearerToken(r.Header)
 	if err != nil {
-		log.Printf("Error extracting token: %s", err)
-		w.WriteHeader(401)
+		log.Printf("Error extracting token: %v", err)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 	err = cfg.DB.RevokeRefreshToken(r.Context(), token)
 	if err != nil {
 		log.Printf("Error revoking token in database: %v", err)
-		w.WriteHeader(500)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(204)
+	w.WriteHeader(http.StatusNoContent)
 }

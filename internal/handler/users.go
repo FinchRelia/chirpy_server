@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"encoding/json"
@@ -20,7 +20,7 @@ type User struct {
 	ChirpyRed      bool      `json:"is_chirpy_red"`
 }
 
-func (cfg *apiConfig) createUsers(w http.ResponseWriter, r *http.Request) {
+func (cfg *APIConfig) CreateUsers(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -30,55 +30,46 @@ func (cfg *apiConfig) createUsers(w http.ResponseWriter, r *http.Request) {
 	params := parameters{}
 	err := decoder.Decode(&params)
 	if err != nil {
-		log.Printf("Error decoding parameters: %s", err)
-		w.WriteHeader(500)
+		log.Printf("Error decoding parameters: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	defer r.Body.Close()
 
 	hashedPassword, err := auth.HashPassword(params.Password)
 	if err != nil {
-		log.Printf("Error hashing password: %s", err)
+		log.Printf("Error hashing password: %v", err)
 	}
 	newDBUser, err := cfg.DB.CreateUser(r.Context(), database.CreateUserParams{
 		Email:          params.Email,
 		HashedPassword: hashedPassword,
 	})
 	if err != nil {
-		log.Printf("Error creating user %s: %s", params.Email, err)
-		w.WriteHeader(500)
+		log.Printf("Error creating user %s: %v", params.Email, err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	newId := newDBUser.ID
-	newUser := User{
+	JsonResponse(w, http.StatusCreated, User{
 		ID:        newId,
 		CreatedAt: newDBUser.CreatedAt,
 		UpdatedAt: newDBUser.UpdatedAt,
 		Email:     newDBUser.Email,
 		ChirpyRed: newDBUser.IsChirpyRed,
-	}
-	dat, err := json.Marshal(newUser)
-	if err != nil {
-		log.Printf("Error marshalling JSON: %s", err)
-		w.WriteHeader(500)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(201)
-	w.Write(dat)
+	})
 }
 
-func (cfg *apiConfig) updateUsers(w http.ResponseWriter, r *http.Request) {
+func (cfg *APIConfig) UpdateUsers(w http.ResponseWriter, r *http.Request) {
 	token, err := auth.GetBearerToken(r.Header)
 	if err != nil {
-		log.Printf("Error extracting token: %s", err)
-		w.WriteHeader(401)
+		log.Printf("Error extracting token: %v", err)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 	userId, err := auth.ValidateJWT(token, cfg.JWT)
 	if err != nil {
-		log.Printf("Invalid JWT: %s", err)
-		w.WriteHeader(401)
+		log.Printf("Invalid JWT: %v", err)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
@@ -91,16 +82,16 @@ func (cfg *apiConfig) updateUsers(w http.ResponseWriter, r *http.Request) {
 	params := parameters{}
 	err = decoder.Decode(&params)
 	if err != nil {
-		log.Printf("Error decoding parameters: %s", err)
-		w.WriteHeader(500)
+		log.Printf("Error decoding parameters: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	defer r.Body.Close()
 
 	hashedPassword, err := auth.HashPassword(params.Password)
 	if err != nil {
-		log.Printf("Error hashing password: %s", err)
-		w.WriteHeader(500)
+		log.Printf("Error hashing password: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	credentialsQueryParams := database.UpdateUserCredentialsParams{
@@ -111,31 +102,23 @@ func (cfg *apiConfig) updateUsers(w http.ResponseWriter, r *http.Request) {
 	updatedCredentials, err := cfg.DB.UpdateUserCredentials(r.Context(), credentialsQueryParams)
 	if err != nil {
 		log.Printf("Error updating user credentials: %v", err)
-		w.WriteHeader(500)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	data, err := json.Marshal(User{
+	JsonResponse(w, http.StatusOK, User{
 		ID:        userId,
 		CreatedAt: updatedCredentials.CreatedAt,
 		UpdatedAt: updatedCredentials.UpdatedAt,
 		Email:     updatedCredentials.Email,
 		ChirpyRed: updatedCredentials.IsChirpyRed,
 	})
-	if err != nil {
-		log.Printf("Error marshalling JSON: %s", err)
-		w.WriteHeader(500)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	w.Write(data)
 }
 
-func (cfg *apiConfig) subscribeUser(w http.ResponseWriter, r *http.Request) {
+func (cfg *APIConfig) SubscribeUser(w http.ResponseWriter, r *http.Request) {
 	_, err := auth.GetAPIKey(r.Header)
 	if err != nil {
-		log.Printf("Error extracting apiKey: %s", err)
-		w.WriteHeader(401)
+		log.Printf("Error extracting apiKey: %v", err)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 	type parameters struct {
@@ -146,28 +129,28 @@ func (cfg *apiConfig) subscribeUser(w http.ResponseWriter, r *http.Request) {
 	params := parameters{}
 	err = decoder.Decode(&params)
 	if err != nil {
-		log.Printf("Error decoding parameters: %s", err)
-		w.WriteHeader(400)
+		log.Printf("Error decoding parameters: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	defer r.Body.Close()
 
 	if params.Event != "user.upgraded" {
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	paramsUserIdString := params.Data["user_id"]
 	paramsUserId, err := uuid.Parse(paramsUserIdString)
 	if err != nil {
 		log.Printf("Specified user_id is not a valid UUID: %v", err)
-		w.WriteHeader(400)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	err = cfg.DB.UpgradeUser(r.Context(), paramsUserId)
 	if err != nil {
 		log.Printf("No user matches user_id given: %v", err)
-		w.WriteHeader(404)
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	w.WriteHeader(204)
+	w.WriteHeader(http.StatusNoContent)
 }

@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"database/sql"
@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (cfg *apiConfig) Login(w http.ResponseWriter, r *http.Request) {
+func (cfg *APIConfig) Login(w http.ResponseWriter, r *http.Request) {
 	type params struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -23,7 +23,7 @@ func (cfg *apiConfig) Login(w http.ResponseWriter, r *http.Request) {
 	err := decoder.Decode(&p)
 	if err != nil {
 		log.Printf("Incorrect email or password")
-		w.WriteHeader(401)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
@@ -35,20 +35,20 @@ func (cfg *apiConfig) Login(w http.ResponseWriter, r *http.Request) {
 	err = auth.CheckPasswordHash(p.Password, loggedUser.HashedPassword)
 	if err != nil {
 		log.Printf("Incorrect email or password")
-		w.WriteHeader(401)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
 	newJwt, err := auth.MakeJWT(loggedUser.ID, cfg.JWT)
 	if err != nil {
-		log.Printf("Error creating JWT: %s", newJwt)
-		w.WriteHeader(500)
+		log.Printf("Error creating JWT: %v", newJwt)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	newRefreshToken, err := auth.MakeRefreshToken()
 	if err != nil {
 		log.Printf("Error creating refresh token: %v", err)
-		w.WriteHeader(500)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -59,8 +59,8 @@ func (cfg *apiConfig) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	_, err = cfg.DB.CreateRefreshToken(r.Context(), refreshTokenParams)
 	if err != nil {
-		log.Printf("Error adding refresh token to db: %s", err)
-		w.WriteHeader(500)
+		log.Printf("Error adding refresh token to db: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	type loginResponse struct {
@@ -72,8 +72,7 @@ func (cfg *apiConfig) Login(w http.ResponseWriter, r *http.Request) {
 		RefreshToken string    `json:"refresh_token"`
 		ChirpyRed    bool      `json:"is_chirpy_red"`
 	}
-
-	data, err := json.Marshal(loginResponse{
+	JsonResponse(w, http.StatusOK, loginResponse{
 		ID:           loggedUser.ID,
 		CreatedAt:    loggedUser.CreatedAt,
 		UpdatedAt:    loggedUser.UpdatedAt,
@@ -82,12 +81,4 @@ func (cfg *apiConfig) Login(w http.ResponseWriter, r *http.Request) {
 		RefreshToken: newRefreshToken,
 		ChirpyRed:    loggedUser.IsChirpyRed,
 	})
-	if err != nil {
-		log.Printf("Error marshalling JSON: %s", err)
-		w.WriteHeader(500)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	w.Write(data)
 }
