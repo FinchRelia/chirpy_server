@@ -167,3 +167,52 @@ func (cfg *apiConfig) getChirp(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(200)
 	w.Write(dat)
 }
+
+func (cfg *apiConfig) deleteChirp(w http.ResponseWriter, r *http.Request) {
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		log.Printf("Error extracting token: %s", err)
+		w.WriteHeader(401)
+		return
+	}
+	userId, err := auth.ValidateJWT(token, cfg.JWT)
+	if err != nil {
+		log.Printf("Invalid JWT: %s", err)
+		w.WriteHeader(401)
+		return
+	}
+	idFromQuery := r.PathValue("chirpID")
+
+	id, err := uuid.Parse(idFromQuery)
+	if err != nil {
+		log.Printf("Not a valid ID: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	chirp, err := cfg.DB.GetChirp(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		log.Printf("Error getting chirp: %s", err)
+		w.WriteHeader(500)
+		return
+	}
+	if chirp.UserID != userId {
+		log.Printf("User %s not allowed to delete chirp owned by %s", userId, chirp.UserID)
+		w.WriteHeader(403)
+		return
+	}
+
+	err = cfg.DB.DeleteChirp(r.Context(), database.DeleteChirpParams{
+		ID:     id,
+		UserID: userId,
+	})
+	if err != nil {
+		log.Printf("Error deleting chirp: %v", err)
+		w.WriteHeader(404)
+		return
+	}
+	w.WriteHeader(204)
+}

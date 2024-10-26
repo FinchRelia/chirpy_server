@@ -16,3 +16,8 @@ RETURNING *;
 -- name: GetUserByEmail :one
 SELECT * FROM users
 WHERE users.email = $1;
+
+-- name: UpgradeUser :exec
+UPDATE users
+SET is_chirpy_red = true
+WHERE id = $1;

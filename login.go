@@ -70,6 +70,7 @@ func (cfg *apiConfig) Login(w http.ResponseWriter, r *http.Request) {
 		Email        string    `json:"email"`
 		AccessToken  string    `json:"token"`
 		RefreshToken string    `json:"refresh_token"`
+		ChirpyRed    bool      `json:"is_chirpy_red"`
 	}
 
 	data, err := json.Marshal(loginResponse{
@@ -79,6 +80,7 @@ func (cfg *apiConfig) Login(w http.ResponseWriter, r *http.Request) {
 		Email:        loggedUser.Email,
 		AccessToken:  newJwt,
 		RefreshToken: newRefreshToken,
+		ChirpyRed:    loggedUser.IsChirpyRed,
 	})
 	if err != nil {
 		log.Printf("Error marshalling JSON: %s", err)
