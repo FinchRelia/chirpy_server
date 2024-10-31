@@ -1,3 +1,12 @@
 = Chirpy Server
 
-This repository holds my version of https://boot.dev[boot.dev] HTTP Servers course.
+This repository holds my version of https://boot.dev[boot.dev] HTTP Servers course. It consists in an API where users can log in and send messages (chirps).
+
+== Get started
+
+Chirpy relies on a Postgres database (the database should be created first). Needed environment variables are:
+
+* DB_URL: Postgres URL connection
+* PLATFORM: dev, on purpose of the course
+* JWT_SECRET: can be generated using `openssl rand -base64 64`
+* POLKA_KEY: predefined dummy API key used to illustrate webhook feature
