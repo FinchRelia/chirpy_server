@@ -10,3 +10,11 @@ Chirpy relies on a Postgres database (the database should be created first). Nee
 * PLATFORM: dev, on purpose of the course
 * JWT_SECRET: can be generated using `openssl rand -base64 64`
 * POLKA_KEY: predefined dummy API key used to illustrate webhook feature
+
+In order to modify DB schema/queries additional libraries are also needed:
+
+[source,shell]
+----
+$ go install github.com/pressly/goose/v3/cmd/goose@latest
+$ go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+----
